@@ -27,12 +27,9 @@ jobs:
         with:
           node-version: '20'
           
-      - name: Install dependencies
-        run: npm install
-        
-      - name: Generate content via Claude API
+      - name: Generate content via DeepSeek API
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: node scripts/generate-content.js
         
       - name: Update index
@@ -54,17 +51,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: main  # 确保获取最新提交
+          ref: main
           
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           
-      - name: Install and Build
-        run: |
-          npm install
-          npm run build
+      - name: Build
+        run: node scripts/build.js
           
       - name: Setup Pages
         uses: actions/configure-pages@v4

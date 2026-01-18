@@ -1,21 +1,24 @@
 /**
- * 内容生成脚本 - 通过Claude API生成热门内容
+ * 内容生成脚本 - 通过DeepSeek API生成热门内容
  * 文件位置: scripts/generate-content.js
  */
 
-const Anthropic = require('@anthropic-ai/sdk');
 const fs = require('fs');
 const path = require('path');
 
-const client = new Anthropic();
+// DeepSeek API配置
+const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 
 // 获取当前时间信息
 function getTimeInfo() {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hour = String(now.getHours()).padStart(2, '0');
+  // 转换为北京时间
+  const bjTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  const year = bjTime.getUTCFullYear().toString();
+  const month = String(bjTime.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(bjTime.getUTCDate()).padStart(2, '0');
+  const hour = String(bjTime.getUTCHours()).padStart(2, '0');
   
   return {
     date: `${year}-${month}-${day}`,
@@ -38,7 +41,7 @@ function ensureDir(dirPath) {
 function buildPrompt(timeInfo) {
   return `你是一个专业的中文社交媒体内容创作者。现在是 ${timeInfo.date} ${timeInfo.hour}:00。
 
-请搜索当前最新的热点话题，然后生成3篇内容：
+请根据当前可能的热点话题，生成3篇内容：
 
 ## 任务要求
 
@@ -67,9 +70,8 @@ function buildPrompt(timeInfo) {
 - 正文：900字以内
 - 标签：3-5个相关标签
 
-请严格按照以下JSON格式输出：
+请严格按照以下JSON格式输出，不要输出其他内容：
 
-\`\`\`json
 {
   "meta": {
     "date": "${timeInfo.date}",
@@ -114,10 +116,7 @@ function buildPrompt(timeInfo) {
       "source_topic": "基于的热点"
     }
   ]
-}
-\`\`\`
-
-请先搜索今日热点，然后生成内容。`;
+}`;
 }
 
 // 将JSON转换为Markdown
@@ -152,11 +151,41 @@ ${item.content}
 
   md += `---
 
-*本内容由AI自动生成，基于当前热点话题*
+*本内容由AI自动生成*
 *生成时间: ${meta.generated_at}*
 `;
 
   return md;
+}
+
+// 调用DeepSeek API
+async function callDeepSeek(prompt) {
+  const response = await fetch(DEEPSEEK_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      max_tokens: 8000,
+      temperature: 0.7
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`DeepSeek API错误: ${response.status} - ${error}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
 }
 
 // 主函数
@@ -165,31 +194,28 @@ async function main() {
   
   console.log(`🚀 开始生成内容: ${timeInfo.date} ${timeInfo.hour}:00`);
   
+  if (!DEEPSEEK_API_KEY) {
+    throw new Error('未设置 DEEPSEEK_API_KEY 环境变量');
+  }
+  
   // 构建提示词
   const prompt = buildPrompt(timeInfo);
   
   try {
-    // 调用Claude API
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 8000,
-      messages: [
-        {
-          role: 'user',
-          content: prompt
-        }
-      ]
-    });
+    // 调用DeepSeek API
+    console.log('📡 调用DeepSeek API...');
+    const text = await callDeepSeek(prompt);
     
     // 提取JSON内容
-    const text = response.content[0].text;
-    const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/);
+    let jsonStr = text;
     
-    if (!jsonMatch) {
-      throw new Error('无法解析JSON输出');
+    // 如果返回的内容包含markdown代码块，提取其中的JSON
+    const jsonMatch = text.match(/```(?:json)?\n?([\s\S]*?)\n?```/);
+    if (jsonMatch) {
+      jsonStr = jsonMatch[1];
     }
     
-    const contentData = JSON.parse(jsonMatch[1]);
+    const contentData = JSON.parse(jsonStr.trim());
     
     // 创建目录
     const contentDir = path.join('content', timeInfo.year, timeInfo.month, timeInfo.day);
