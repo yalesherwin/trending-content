@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>每日热门内容</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .content-card {
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .content-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    }
+    .prose {
+      line-height: 1.8;
+    }
+    .prose p {
+      margin-bottom: 1em;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div id="app" class="max-w-4xl mx-auto px-4 py-8">
+    <!-- 加载中 -->
+    <div id="loading" class="text-center py-20">
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+      <p class="mt-4 text-gray-500">加载中...</p>
+    </div>
+    
+    <!-- 内容容器 -->
+    <div id="content" class="hidden">
+      <!-- 头部 -->
+      <header class="text-center mb-12">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">📰 每日热门内容</h1>
+        <p class="text-gray-500">AI自动生成的经济分析、励志故事与爆款文案</p>
+        <p id="update-time" class="text-sm text-gray-400 mt-2"></p>
+      </header>
+      
+      <!-- 日期选择 -->
+      <div class="flex gap-2 mb-8 overflow-x-auto pb-2">
+        <select id="date-select" class="px-4 py-2 border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </select>
+        <select id="hour-select" class="px-4 py-2 border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </select>
+      </div>
+      
+      <!-- 内容卡片 -->
+      <div id="cards" class="space-y-6">
+      </div>
+    </div>
+    
+    <!-- 错误提示 -->
+    <div id="error" class="hidden text-center py-20">
+      <p class="text-red-500 text-lg">😕 暂无内容</p>
+      <p class="text-gray-400 mt-2">请稍后再试</p>
+    </div>
+  </div>
+
+  <script>
+    // 全局数据
+    let indexData = null;
+    let currentContent = null;
+    
+    // DOM元素
+    const loadingEl = document.getElementById('loading');
+    const contentEl = document.getElementById('content');
+    const errorEl = document.getElementById('error');
+    const cardsEl = document.getElementById('cards');
+    const dateSelect = document.getElementById('date-select');
+    const hourSelect = document.getElementById('hour-select');
+    const updateTimeEl = document.getElementById('update-time');
+    
+    // 加载索引
+    async function loadIndex() {
+      try {
+        const res = await fetch('content/index.json');
+        if (!res.ok) throw new Error('Index not found');
+        indexData = await res.json();
+        return true;
+      } catch (e) {
+        console.error('Failed to load index:', e);
+        return false;
+      }
+    }
+    
+    // 加载内容
+    async function loadContent(jsonPath) {
+      try {
+        const res = await fetch(`content/${jsonPath}`);
+        if (!res.ok) throw new Error('Content not found');
+        currentContent = await res.json();
+        renderContent();
+      } catch (e) {
+        console.error('Failed to load content:', e);
+      }
+    }
+    
+    // 渲染内容卡片
+    function renderContent() {
+      if (!currentContent) return;
+      
+      const typeColors = {
+        economy: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600' },
+        inspiration: { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-600' },
+        viral: { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-600' }
+      };
+      
+      cardsEl.innerHTML = currentContent.contents.map(item => {
+        const colors = typeColors[item.type] || typeColors.economy;
+        const contentHtml = item.content.split('\n').map(p => p ? `<p>${p}</p>` : '').join('');
+        
+        return `
+          <article class="content-card bg-white rounded-xl shadow-sm border ${colors.border} overflow-hidden">
+            <div class="${colors.bg} px-6 py-4 border-b ${colors.border}">
+              <div class="flex items-center gap-2">
+                <span class="text-2xl">${item.icon}</span>
+                <span class="${colors.text} font-medium">${item.type_cn}</span>
+              </div>
+            </div>
+            <div class="p-6">
+              <h2 class="text-xl font-bold text-gray-800 mb-3">${item.title}</h2>
+              <p class="text-gray-500 text-sm mb-4 italic">${item.summary}</p>
+              <div class="flex gap-2 mb-4">
+                ${item.tags.map(tag => `<span class="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">${tag}</span>`).join('')}
+              </div>
+              <div class="prose text-gray-700">
+                ${contentHtml}
+              </div>
+              <div class="mt-4 pt-4 border-t text-sm text-gray-400">
+                字数: ${item.word_count} | 话题来源: ${item.source_topic}
+              </div>
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
+    
+    // 填充日期选择器
+    function populateDateSelect() {
+      if (!indexData || !indexData.entries.length) return;
+      
+      // 获取唯一日期
+      const dates = [...new Set(indexData.entries.map(e => e.date))];
+      
+      dateSelect.innerHTML = dates.map(date => 
+        `<option value="${date}">${date}</option>`
+      ).join('');
+      
+      // 默认选中最新日期
+      dateSelect.value = dates[0];
+      populateHourSelect(dates[0]);
+    }
+    
+    // 填充小时选择器
+    function populateHourSelect(date) {
+      if (!indexData) return;
+      
+      const hours = indexData.entries
+        .filter(e => e.date === date)
+        .map(e => e.hour);
+      
+      hourSelect.innerHTML = hours.map(hour => 
+        `<option value="${hour}">${hour}:00</option>`
+      ).join('');
+      
+      // 默认选中最新小时
+      if (hours.length) {
+        hourSelect.value = hours[0];
+        loadSelectedContent();
+      }
+    }
+    
+    // 加载选中的内容
+    function loadSelectedContent() {
+      const date = dateSelect.value;
+      const hour = hourSelect.value;
+      
+      const entry = indexData.entries.find(e => e.date === date && e.hour === hour);
+      if (entry) {
+        loadContent(entry.file_json);
+      }
+    }
+    
+    // 事件监听
+    dateSelect.addEventListener('change', () => {
+      populateHourSelect(dateSelect.value);
+    });
+    
+    hourSelect.addEventListener('change', loadSelectedContent);
+    
+    // 初始化
+    async function init() {
+      const success = await loadIndex();
+      
+      loadingEl.classList.add('hidden');
+      
+      if (success && indexData.entries.length) {
+        contentEl.classList.remove('hidden');
+        updateTimeEl.textContent = `最后更新: ${new Date(indexData.last_updated).toLocaleString('zh-CN')}`;
+        populateDateSelect();
+      } else {
+        errorEl.classList.remove('hidden');
+      }
+    }
+    
+    init();
+  </script>
+</body>
+</html>
