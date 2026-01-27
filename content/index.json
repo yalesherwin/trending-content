@@ -1,7 +1,13 @@
 {
-  "last_updated": "2026-01-27T14:21:39.788Z",
-  "total_count": 196,
+  "last_updated": "2026-01-27T16:18:52.187Z",
+  "total_count": 197,
   "entries": [
+    {
+      "date": "2026-01-28",
+      "hour": "00",
+      "file_json": "2026/01/28/content_2026-01-28_00.json",
+      "file_md": "2026/01/28/content_2026-01-28_00.md"
+    },
     {
       "date": "2026-01-27",
       "hour": "22",
