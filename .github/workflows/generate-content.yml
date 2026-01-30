@@ -5,9 +5,9 @@ name: Generate Trending Content
 
 on:
   schedule:
-    # 每小时运行一次 (UTC时间)
-    - cron: '0 * * * *'
-  workflow_dispatch:  # 允许手动触发
+    # 每天 UTC 0:00 运行一次（北京时间早上8点）
+    - cron: '0 0 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: write
